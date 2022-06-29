@@ -14,17 +14,47 @@ import (
 
 var once sync.Once
 
+func (sb Sealer) GetCCUnsealedPath() (string, string) {
+	datapath, isExist := os.LookupEnv("FFI_PIECE_PATH")
+	if !isExist {
+		panic("FFI_PIECE_X env not exist")
+	}
+	if datapath == "" {
+		panic("FFI_PIECE_X path is empty")
+	}
+	return path.Join(datapath, "data"), path.Join(datapath, "cid")
+}
+
+func (sb *Sealer) CCUnsealedIsExist() (bool, error) {
+	data, cid := sb.GetCCUnsealedPath()
+	_, err := os.Stat(data)
+	_, err = os.Stat(cid)
+	if err == nil {
+		return true, nil
+	}
+	err = os.Remove(data)
+	err = os.Remove(cid)
+	return false, err
+}
+
 func (sb *Sealer) MakeUnsealed(pieceCID cid.Cid, srcPath string) error {
-	dir, _ := path.Split(srcPath)
-	dir = path.Join(dir, "../")
-	dir = path.Join(dir, "../")
-	dir = path.Join(dir, "addpiece")
+
+	unsealedIsExist, err := sb.CCUnsealedIsExist()
+	if err != nil {
+		return err
+	}
+
+	if unsealedIsExist {
+		return nil
+	}
+
+	data, pcid := sb.GetCCUnsealedPath()
 
 	srcFile, err := os.OpenFile(srcPath, os.O_RDONLY, 0666)
 	if err != nil {
 		return err
 	}
-	dstFile, err := os.OpenFile(path.Join(dir, "unsealed"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	dstFile, err := os.OpenFile(data, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
@@ -40,7 +70,7 @@ func (sb *Sealer) MakeUnsealed(pieceCID cid.Cid, srcPath string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(path.Join(dir, "cid"), text, 0666)
+	return ioutil.WriteFile(pcid, text, 0666)
 }
 
 func (sb *Sealer) GetUnsealed(ctx context.Context, sector storiface.SectorRef, pieceSize abi.UnpaddedPieceSize) (abi.PieceInfo, error) {
@@ -54,12 +84,10 @@ func (sb *Sealer) GetUnsealed(ctx context.Context, sector storiface.SectorRef, p
 	if err != nil {
 		return abi.PieceInfo{}, err
 	}
-	dir, _ := path.Split(stagedPath.Unsealed)
-	dir = path.Join(dir, "../")
-	dir = path.Join(dir, "../")
-	dir = path.Join(dir, "addpiece")
 
-	bs, err := os.ReadFile(path.Join(dir, "cid"))
+	data, pcid := sb.GetCCUnsealedPath()
+
+	bs, err := os.ReadFile(pcid)
 	if err != nil {
 		return abi.PieceInfo{}, err
 	}
@@ -69,7 +97,7 @@ func (sb *Sealer) GetUnsealed(ctx context.Context, sector storiface.SectorRef, p
 		return abi.PieceInfo{}, err
 	}
 
-	srcFile, err := os.OpenFile(path.Join(dir, "unsealed"), os.O_RDONLY, 0666)
+	srcFile, err := os.OpenFile(data, os.O_RDONLY, 0666)
 	if err != nil {
 		return abi.PieceInfo{}, err
 	}
@@ -80,7 +108,9 @@ func (sb *Sealer) GetUnsealed(ctx context.Context, sector storiface.SectorRef, p
 	defer srcFile.Close()
 	defer dstFile.Close()
 
-	_, err = io.Copy(dstFile, srcFile)
+	if _, err = io.Copy(dstFile, srcFile); err != nil {
+		return abi.PieceInfo{}, err
+	}
 
 	return abi.PieceInfo{
 		Size:     pieceSize.Padded(),
