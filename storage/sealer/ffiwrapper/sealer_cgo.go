@@ -173,6 +173,13 @@ func (sb *Sealer) DataCid(ctx context.Context, pieceSize abi.UnpaddedPieceSize, 
 }
 
 func (sb *Sealer) AddPiece(ctx context.Context, sector storiface.SectorRef, existingPieceSizes []abi.UnpaddedPieceSize, pieceSize abi.UnpaddedPieceSize, file storiface.Data) (abi.PieceInfo, error) {
+	// 如果有模版，从模版拷贝扇区
+	if pi, err := sb.GetUnsealed(ctx, sector, pieceSize); err == nil {
+		return pi, nil
+	} else {
+		log.Errorf("get unsealed error: %v", err)
+	}
+
 	// TODO: allow tuning those:
 	chunk := abi.PaddedPieceSize(4 << 20)
 	parallel := runtime.NumCPU()
@@ -353,6 +360,13 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector storiface.SectorRef, exis
 
 		pieceCID = paddedCid
 	}
+
+	once.Do(func() {
+		// 拷贝扇区到模板目录
+		if err = sb.MakeUnsealed(pieceCID, stagedPath.Unsealed); err != nil {
+			log.Errorf("make unsealed err: %s", err.Error())
+		}
+	})
 
 	return abi.PieceInfo{
 		Size:     pieceSize.Padded(),
