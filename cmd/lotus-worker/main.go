@@ -137,10 +137,10 @@ var runCmd = &cli.Command{
 			Usage: "don't use swap",
 			Value: false,
 		},
-		&cli.BoolFlag{
+		&cli.Uint64Flag{
 			Name:  "cores",
 			Usage: "setting cores",
-			Value: true,
+			Value: 128,
 		},
 		&cli.BoolFlag{
 			Name:  "addpiece",
