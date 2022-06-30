@@ -41,7 +41,7 @@ func (sb *Sealer) MakeUnsealed(pieceCID cid.Cid, srcPath string) error {
 
 	unsealedIsExist, err := sb.CCUnsealedIsExist()
 	if err != nil {
-		return err
+		log.Errorf("cc unsealed is exist error: %v", err)
 	}
 
 	if unsealedIsExist {
