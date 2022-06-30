@@ -138,6 +138,11 @@ var runCmd = &cli.Command{
 			Value: false,
 		},
 		&cli.BoolFlag{
+			Name:  "cores",
+			Usage: "setting cores",
+			Value: true,
+		},
+		&cli.BoolFlag{
 			Name:  "addpiece",
 			Usage: "enable addpiece",
 			Value: true,
@@ -491,6 +496,7 @@ var runCmd = &cli.Command{
 				NoSwap:                    cctx.Bool("no-swap"),
 				MaxParallelChallengeReads: cctx.Int("post-parallel-reads"),
 				ChallengeReadTimeout:      cctx.Duration("post-read-timeout"),
+				Cores:                     cctx.Uint64("cores"),
 			}, remote, localStore, nodeApi, nodeApi, wsts),
 			LocalStore: localStore,
 			Storage:    lr,

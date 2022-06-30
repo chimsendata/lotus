@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,6 +40,8 @@ type WorkerConfig struct {
 
 	MaxParallelChallengeReads int           // 0 = no limit
 	ChallengeReadTimeout      time.Duration // 0 = no timeout
+
+	Cores uint64
 }
 
 // used do provide custom proofs impl (mostly used in testing)
@@ -70,6 +71,8 @@ type LocalWorker struct {
 	session     uuid.UUID
 	testDisable int64
 	closing     chan struct{}
+
+	cores uint64
 }
 
 func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, envLookup EnvFunc, store paths.Store, local *paths.Local, sindex paths.SectorIndex, ret storiface.WorkerReturn, cst *statestore.StateStore) *LocalWorker {
@@ -95,6 +98,8 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, envLookup EnvFunc,
 		challengeReadTimeout: wcfg.ChallengeReadTimeout,
 		session:              uuid.New(),
 		closing:              make(chan struct{}),
+
+		cores: wcfg.Cores,
 	}
 
 	if wcfg.MaxParallelChallengeReads > 0 {
@@ -774,9 +779,13 @@ func (l *LocalWorker) memInfo() (memPhysical, memUsed, memSwap, memSwapUsed uint
 }
 
 func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
-	hostname, err := os.Hostname() // TODO: allow overriding from config
-	if err != nil {
-		panic(err)
+	var err error
+	hostname, exist := os.LookupEnv("WORKER_NAME")
+	if !exist {
+		hostname, err = os.Hostname() // TODO: allow overriding from config
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	gpus, err := ffi.GetGPUDevices()
@@ -804,7 +813,7 @@ func (l *LocalWorker) Info(context.Context) (storiface.WorkerInfo, error) {
 			MemUsed:     memUsed,
 			MemSwap:     memSwap,
 			MemSwapUsed: memSwapUsed,
-			CPUs:        uint64(runtime.NumCPU()),
+			CPUs:        l.cores,
 			GPUs:        gpus,
 			Resources:   resEnv,
 		},
