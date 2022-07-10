@@ -118,10 +118,13 @@ func newLocalWorker(executor ExecutorFunc, wcfg WorkerConfig, envLookup EnvFunc,
 
 	go func() {
 		for _, call := range unfinished {
-			hostname, osErr := os.Hostname()
-			if osErr != nil {
-				log.Errorf("get hostname err: %+v", err)
-				hostname = ""
+
+			hostname, exist := os.LookupEnv("WORKER_NAME")
+			if !exist {
+				hostname, err = os.Hostname() // TODO: allow overriding from config
+				if err != nil {
+					panic(err)
+				}
 			}
 
 			err := storiface.Err(storiface.ErrTempWorkerRestart, xerrors.Errorf("worker [Hostname: %s] restarted", hostname))
